@@ -303,3 +303,27 @@ class ClaudeCodeVersionTests(unittest.TestCase):
         found = limits_probe.probe(binary.read_bytes())
         self.assertEqual(found["missing"], [], "anchors not found in %s" % binary)
         self.assertEqual(limits_probe.compare(found), [], "limits in %s differ from build.py" % binary)
+
+
+class PerformanceTests(unittest.TestCase):
+    """N-3: 1,000 memory files / 5 MB must scan and render within one second."""
+
+    def test_thousand_files_render_within_one_second(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "projects"
+            for p in range(10):
+                d = root / ("-home-demo-Projects-p%d" % p) / "memory"
+                d.mkdir(parents=True)
+                index = []
+                for i in range(100):
+                    body = ("---\nname: note-%d\ndescription: d\nmetadata:\n  type: project\n  modified: 2026-09-01T00:00:00Z\n---\n" % i
+                            + ("x" * 100 + " [[note-%d]]\n" % ((i + 1) % 100)) * 48)  # ~5.5 KB per file
+                    (d / ("project_note_%d.md" % i)).write_text(body, encoding="utf-8")
+                    index.append("- [n%d](project_note_%d.md) — d" % (i, i))
+                (d / "MEMORY.md").write_text("\n".join(index) + "\n", encoding="utf-8")
+            start = time.perf_counter()
+            model = build.scan(root, fs_root=tmp, home="/home/demo", now_ms=NOW_MS)
+            build.render(model, ROOT / "skills" / "ccmemgraph")
+            elapsed = time.perf_counter() - start
+        self.assertEqual(len(model["nodes"]), 1000)
+        self.assertLess(elapsed, 1.0, "scan + render took %.2fs" % elapsed)
