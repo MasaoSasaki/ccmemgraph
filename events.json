@@ -1,0 +1,6 @@
+[
+ {"date": "2026-10-10", "event": "v1.0.0 published (public repo, own marketplace)"},
+ {"date": "2026-10-10", "event": "v1.1.0: running-version note, limits probe, weekly drift check"},
+ {"date": "2026-10-10", "event": "installed on both of the author's Macs"},
+ {"date": "2026-10-24", "event": "earliest date for an awesome-claude-code recommendation (14-day rule)", "planned": true}
+]
