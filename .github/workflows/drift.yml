@@ -1,0 +1,75 @@
+# Weekly check that the facts this repo states about the outside world still hold:
+# the memory limits read from the latest Claude Code release, the vendored D3 version, and the links in the docs.
+# A failed check opens one issue per subject and version, so nothing is lost when nobody is watching the Actions tab.
+name: drift
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  claude-code-limits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install the latest Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s latest
+          ls ~/.local/share/claude/versions
+      - name: Re-read the limits
+        id: probe
+        continue-on-error: true
+        run: |
+          bin=$(ls -d ~/.local/share/claude/versions/* | sort -V | tail -1)
+          echo "version=$(basename "$bin")" >> "$GITHUB_OUTPUT"
+          python tests/limits_probe.py "$bin" | tee probe.txt
+      - name: Open an issue when the limits moved or the anchors are gone
+        if: steps.probe.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Claude Code ${{ steps.probe.outputs.version }}: memory limits differ from build.py or could not be read"
+          if [ -z "$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')" ]; then
+            { echo "Output of \`tests/limits_probe.py\` against Claude Code ${{ steps.probe.outputs.version }}:"; echo; echo '```'; cat probe.txt; echo '```'; echo; echo "Re-measure (design.md §3.1), update \`SOURCE_VERSION\` and \`LIMITS\` in \`skills/ccmemgraph/build.py\`, then release."; } > issue.md
+            gh issue create --title "$title" --body-file issue.md
+          fi
+          exit 1
+  d3-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Compare the vendored D3 with npm latest
+        id: d3
+        continue-on-error: true
+        run: |
+          vendored=$(head -1 skills/ccmemgraph/vendor/d3.min.js | grep -o 'v[0-9.]*' | tr -d v)
+          latest=$(npm view d3 version)
+          echo "vendored=$vendored latest=$latest"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          test "$vendored" = "$latest"
+      - name: Open an issue when a newer D3 exists
+        if: steps.d3.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="D3 ${{ steps.d3.outputs.latest }} is out; vendored copy is older"
+          if [ -z "$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')" ]; then
+            gh issue create --title "$title" --body "Replace skills/ccmemgraph/vendor/d3.min.js with the new release (ISC), update LICENSE-d3 if its text changed, run the render check and the GIF, then release."
+          fi
+          exit 1
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --no-progress README.md CHANGELOG.md skills/ccmemgraph/SKILL.md
+          fail: true

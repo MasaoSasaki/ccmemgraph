@@ -9,7 +9,7 @@ claude plugin marketplace add MasaoSasaki/ccmemgraph
 claude plugin install ccmemgraph@ccmemgraph
 ```
 
-Then type `/ccmemgraph` in any session. Local only, nothing is sent anywhere, no dependencies beyond Python 3.9+.
+Then type `/ccmemgraph` in any session. Local only, nothing is sent anywhere, no dependencies beyond Python 3.9+ (the floor is the `python3` that ships with the macOS Command Line Tools, 3.9.6).
 
 ## What you see
 
@@ -22,7 +22,7 @@ Claude Code keeps auto memory per project under `~/.claude/projects/<project>/me
 
 Each node is one memory file. Colour is age (the deeper the blue, the longer since the `modified` stamp, or the file's mtime when there is none), a red or yellow ring marks the memories the next session will not see (cut or unindexed), a dashed circle is a missing file, and size is how many other memories link to it. Hover for the `type`, the index line and the description. The **Checks** panel lists the load window per project, with the exact lines Claude Code will cut, plus findings such as files longer than the 4,096 characters recall shows, memories outside the recall scan, broken `[[links]]`, duplicate files across projects, and memories that look like they were written into the wrong project's store. The **Table** panel is the same data sortable by age, size and links.
 
-Everything is computed from the files as they are now, so it describes the *next* session, not the current one. Limits are those of Claude Code 2.1.296; the page says so.
+Everything is computed from the files as they are now, so it describes the *next* session, not the current one. Limits are those of Claude Code 2.1.296; the page says so, and says when the machine runs a different version. A weekly workflow re-reads the limits from the latest Claude Code release and opens an issue when they move.
 
 ## Running outside Claude Code
 
@@ -40,6 +40,7 @@ The script reads your memory directories and writes one HTML file. It never writ
 python3 -m unittest discover -s tests -v       # structure, load window, every finding kind on the demo data
 cd tests/render && npm ci && npx playwright install chromium && node check.mjs out/demo.html   # layout and panel sync
 python3 fixtures/generate_demo.py              # regenerate the demo data set
+python3 tests/limits_probe.py                   # re-read the limits from the installed Claude Code binary and compare with build.py
 ```
 
 ## License

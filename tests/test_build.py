@@ -9,10 +9,12 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills" / "ccmemgraph"))
+sys.path.insert(0, str(ROOT / "tests"))
 import build  # noqa: E402
 
 DEMO = ROOT / "fixtures" / "demo"
@@ -257,3 +259,47 @@ def append_index(path, lines):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClaudeCodeVersionTests(unittest.TestCase):
+    """The limits are measured on one Claude Code version; the page must say so and the probe must still read them."""
+
+    def test_running_version_comes_from_execpath(self):
+        with unittest.mock.patch.dict(os.environ, {"CLAUDE_CODE_EXECPATH": "/x/versions/2.1.300"}):
+            self.assertEqual(build.running_claude_code_version(), "2.1.300")
+
+    def test_summary_mentions_running_version_only_when_it_differs(self):
+        model = build.scan_empty(Path("/nonexistent"))
+        model["claude_code"] = build.claude_code_info(build.SOURCE_VERSION)
+        self.assertEqual(len(build.summary_lines(model, Path("o"))), 4)
+        model["claude_code"] = build.claude_code_info("9.9.9")
+        lines = build.summary_lines(model, Path("o"))
+        self.assertEqual(len(lines), 5)
+        self.assertIn("running 9.9.9, limits measured on " + build.SOURCE_VERSION, lines[3])
+
+    def test_docs_state_the_measured_version(self):
+        self.assertIn("Claude Code " + build.SOURCE_VERSION, (ROOT / "README.md").read_text())
+        plugin = (ROOT / ".claude-plugin" / "plugin.json").read_text()
+        version = re.search(r'"version":\s*"([^"]+)"', plugin).group(1)
+        self.assertIn("## [%s]" % version, (ROOT / "CHANGELOG.md").read_text())
+
+    def test_probe_reads_a_synthetic_limits_statement(self):
+        import limits_probe
+        src = (b'xx;var Qz="MEMORY.md",aB=210,cD=26000,eF=4*cD,gH=150,iJ=5000;function f(){}'
+               b'.filter(z).slice(0,7),[a,b]=await q();return[...a.length>0?[{type:"relevant_memories",memories:a}]:[]]'
+               b'replace(/[^a-zA-Z0-9]/g,"-")')
+        found = limits_probe.probe(src)
+        self.assertEqual((found["index_lines"], found["index_chars"], found["index_read_chars"], found["recall_scan_files"],
+                          found["file_chars"], found["recall_per_turn"], found["slug_rule"], found["missing"]),
+                         (210, 26000, 104000, 150, 5000, 7, True, []))
+        self.assertEqual(len(limits_probe.compare(found)), 6)
+        self.assertEqual(limits_probe.probe(b"nothing here")["missing"], ["limits statement (0 matches)", "per-turn cap", "slug rule"])
+
+    def test_installed_claude_code_still_has_the_measured_limits(self):
+        import limits_probe
+        binary = limits_probe.find_binary()
+        if binary is None:
+            self.skipTest("no Claude Code binary on this machine")
+        found = limits_probe.probe(binary.read_bytes())
+        self.assertEqual(found["missing"], [], "anchors not found in %s" % binary)
+        self.assertEqual(limits_probe.compare(found), [], "limits in %s differ from build.py" % binary)

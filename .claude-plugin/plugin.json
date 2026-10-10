@@ -1,7 +1,7 @@
 {
   "name": "ccmemgraph",
   "description": "X-ray for Claude Code's auto memory: every project, what gets loaded, what's gone stale.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": { "name": "Masao Sasaki" },
   "license": "MIT",
   "repository": "https://github.com/MasaoSasaki/ccmemgraph",

@@ -24,8 +24,11 @@ from pathlib import Path
 if sys.version_info < (3, 9):
     sys.exit("ccmemgraph needs Python 3.9 or newer (found %d.%d)" % sys.version_info[:2])
 
-# Load limits. Docs (https://code.claude.com/docs/en/memory) say "200 lines or 25KB";
-# the exact behaviour below is what Claude Code 2.1.296 does, read from its binary on 2026-10-10.
+# Load limits. Docs (https://code.claude.com/docs/en/memory) say "200 lines or 25KB"; the exact behaviour
+# below was read from the Claude Code binary of SOURCE_VERSION. tests/limits_probe.py re-reads them from any
+# binary and a weekly workflow runs it against the latest release, so SOURCE_VERSION is the last version the
+# values were measured on, not a compatibility promise.
+SOURCE_VERSION = "2.1.296"
 LIMITS = {
     "index_lines": 200,          # lines of MEMORY.md kept at session start
     "index_chars": 25000,        # UTF-16 code units of MEMORY.md kept (JS string length, not bytes)
@@ -33,8 +36,32 @@ LIMITS = {
     "file_chars": 4096,          # memory recall shows only the first 4096 chars of a file
     "recall_scan_files": 200,    # recall scans the newest 200 files by mtime
     "recall_per_turn": 5,        # recall attaches at most 5 memories per turn
-    "source": "Claude Code 2.1.296",
+    "source_version": SOURCE_VERSION,
+    "source": "Claude Code " + SOURCE_VERSION,
 }
+VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[\w.]+)?$")
+
+
+def running_claude_code_version() -> str | None:
+    """Version of the Claude Code this process runs under, or None when it cannot be told.
+
+    Inside a session Claude Code exports CLAUDE_CODE_EXECPATH, whose last path component is the version of
+    the binary actually running (the `claude` on PATH may already be newer). Outside a session fall back to
+    `claude --version`; any failure means None, never a guess.
+    """
+    exe = os.environ.get("CLAUDE_CODE_EXECPATH", "")
+    if exe and VERSION_RE.match(Path(exe).name):
+        return Path(exe).name
+    try:
+        out = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r"\d+\.\d+\.\d+(?:-[\w.]+)?", out)
+    return m.group(0) if m else None
+
+
+def claude_code_info(running: str | None = None) -> dict:
+    return {"measured": SOURCE_VERSION, "running": running}
 TYPES = ("user", "feedback", "project", "reference")
 STATES = ("visible", "cut", "unindexed", "missing")
 SEVERITY = {  # error: content is actually lost; warning: content is not seen; info: cosmetic or an estimate
@@ -334,7 +361,8 @@ def scan(root: Path, fs_root: str = "/", home: str | None = None, now_ms: float 
         "nodes": list(nodes.values()), "links": links, "issues": issues,
         "projects": sorted(projects, key=lambda p: p["label"]),
         "states": {s: sum(1 for n in nodes.values() if n["state"] == s) for s in STATES},
-        "limits": LIMITS, "generated": dt.datetime.now().astimezone().isoformat(timespec="minutes"),
+        "limits": LIMITS, "claude_code": claude_code_info(),
+        "generated": dt.datetime.now().astimezone().isoformat(timespec="minutes"),
         "root": str(root), "home": home,
     }
 
@@ -407,12 +435,17 @@ def summary_lines(model: dict, out: Path) -> list:
     for i in model["issues"]:
         kinds[i["kind"]] = kinds.get(i["kind"], 0) + 1
     files = sum(1 for n in model["nodes"] if n["state"] != "missing")
-    return [
+    lines = [
         "projects=%d files=%d links=%d" % (len(model["projects"]), files, len(model["links"])),
         "state: " + " ".join("%s=%d" % (s, model["states"][s]) for s in STATES),
         "issues: " + (" ".join("%s=%d" % kv for kv in sorted(kinds.items())) or "none"),
-        "out: %s" % out,
     ]
+    cc = model["claude_code"]
+    if cc["running"] and cc["running"] != cc["measured"]:
+        lines.append("claude code: running %s, limits measured on %s (not re-verified on this version)"
+                     % (cc["running"], cc["measured"]))
+    lines.append("out: %s" % out)
+    return lines
 
 
 def open_in_browser(path: Path) -> None:
@@ -437,6 +470,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     root = Path(a.root).expanduser()
     model = scan(root, fs_root=a.fs_root, home=a.home) if root.is_dir() else scan_empty(root)
+    model["claude_code"] = claude_code_info(running_claude_code_version())
     out = Path(a.out).expanduser()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(model, Path(__file__).resolve().parent), encoding="utf-8")
@@ -448,7 +482,8 @@ def main(argv=None) -> int:
 
 def scan_empty(root: Path) -> dict:
     return {"nodes": [], "links": [], "issues": [], "projects": [], "states": {s: 0 for s in STATES}, "limits": LIMITS,
-            "generated": dt.datetime.now().astimezone().isoformat(timespec="minutes"), "root": str(root), "home": str(Path.home())}
+            "claude_code": claude_code_info(), "generated": dt.datetime.now().astimezone().isoformat(timespec="minutes"),
+            "root": str(root), "home": str(Path.home())}
 
 
 if __name__ == "__main__":

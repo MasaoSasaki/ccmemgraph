@@ -107,7 +107,7 @@
 <body>
 <header>
   <h1>ccmemgraph</h1>
-  <p class="sub">Claude Code auto memory under <code id="root"></code>. Nodes are memory files, colour is age (deeper = older), a ring marks what the next session will not see in <code>MEMORY.md</code>, size is in-links. Generated <span id="gen"></span>.</p>
+  <p class="sub">Claude Code auto memory under <code id="root"></code>. Nodes are memory files, colour is age (deeper = older), a ring marks what the next session will not see in <code>MEMORY.md</code>, size is in-links. Generated <span id="gen"></span>. <span id="cc"></span></p>
 </header>
 <div class="bar">
   <div class="states" id="states" aria-label="memory states"></div>
@@ -152,6 +152,11 @@ const fmtAge = d => d.age_days == null ? "" : `${Math.round(d.age_days)} d · ${
 const typeLabel = t => t || "(none)";
 
 document.getElementById("gen").textContent = DATA.generated;
+const CC = DATA.claude_code;
+const ccNote = CC.running && CC.running !== CC.measured
+  ? `Limits are those of Claude Code ${CC.measured}; this machine runs ${CC.running}, on which they have not been re-verified.`
+  : `Limits are those of Claude Code ${CC.measured}.`;
+document.getElementById("cc").textContent = ccNote;
 document.getElementById("root").textContent = DATA.root.replace(DATA.home, "~");
 
 const svg = d3.select("#g"), main = document.querySelector("main"), tip = document.getElementById("tip");
@@ -278,7 +283,7 @@ function renderIssues(project) {
   const label = p => DATA.projects.find(x => x.project === p)?.label ?? p;
   document.getElementById("btn-issues").textContent = `Checks (${issues.length})`;
   document.getElementById("issues").innerHTML =
-    `<h2>Load window per project</h2><p class="note">What the next session loads from each MEMORY.md, computed from the files as they are now. Limits are those of ${esc(L.source)}: ${L.index_lines} lines / ${L.index_chars.toLocaleString()} chars for the index, ${L.file_chars.toLocaleString()} chars shown per recalled file, recall scans the newest ${L.recall_scan_files} files.</p>` +
+    `<h2>Load window per project</h2><p class="note">What the next session loads from each MEMORY.md, computed from the files as they are now. ${esc(ccNote)} ${L.index_lines} lines / ${L.index_chars.toLocaleString()} chars for the index, ${L.file_chars.toLocaleString()} chars shown per recalled file, recall scans the newest ${L.recall_scan_files} files.</p>` +
     `<table><thead><tr><th>project</th><th>files</th><th>visible</th><th>cut</th><th>unindexed</th><th>missing</th><th>MEMORY.md lines</th><th>MEMORY.md chars</th><th>cut off</th><th>outside recall</th></tr></thead><tbody>` +
       projects.map(p => `<tr><td>${esc(p.label)}</td><td class="n">${p.files}</td><td class="n">${p.states.visible}</td><td class="n">${p.states.cut}</td><td class="n">${p.states.unindexed}</td><td class="n">${p.states.missing}</td>` +
         `<td class="n">${p.index_lines} <span class="mt">/ ${L.index_lines}</span></td><td class="n">${p.index_chars.toLocaleString()} <span class="mt">/ ${L.index_chars.toLocaleString()}</span></td>` +

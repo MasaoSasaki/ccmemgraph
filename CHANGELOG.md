@@ -5,6 +5,25 @@ All notable changes to ccmemgraph are listed here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version here
 matches `version` in `.claude-plugin/plugin.json`.
 
+## [1.1.0] - 2026-10-10
+
+### Added
+
+- The page and the summary line say which Claude Code version this machine
+  runs when it differs from the version the limits were measured on.
+- `tests/limits_probe.py` re-reads the limits from any Claude Code binary and
+  compares them with `build.py`; the unit tests run it against the installed
+  binary when there is one.
+- Weekly `drift` workflow: re-reads the limits from the latest Claude Code
+  release, compares the vendored D3 with npm, checks the links in the docs,
+  and opens an issue when something moved.
+- Dependabot for GitHub Actions and the render-test npm packages.
+
+### Changed
+
+- README states why Python 3.9 is the floor (the macOS Command Line Tools
+  `python3` is 3.9.6).
+
 ## [1.0.0] - 2026-10-10
 
 ### Added
@@ -24,4 +43,5 @@ matches `version` in `.claude-plugin/plugin.json`.
 - Light and dark mode, no network access, D3 7.9.0 bundled into the page.
 - Python 3.9+ standard library only; tested on 3.9 and 3.13.
 
+[1.1.0]: https://github.com/MasaoSasaki/ccmemgraph/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MasaoSasaki/ccmemgraph/releases/tag/v1.0.0
