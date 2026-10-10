@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+node_modules/
+tests/render/out/
+.DS_Store
+.specs/

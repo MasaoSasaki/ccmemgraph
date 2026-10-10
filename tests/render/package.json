@@ -1,0 +1,11 @@
+{
+  "name": "ccmemgraph-render-check",
+  "private": true,
+  "type": "module",
+  "description": "Headless check that the generated page lays out and that the sidebar keeps the three panels in sync. Development only; the plugin itself has no Node dependency.",
+  "devDependencies": {
+    "gifenc": "1.0.3",
+    "playwright": "1.64.0",
+    "pngjs": "7.0.0"
+  }
+}

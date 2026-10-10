@@ -1,0 +1,14 @@
+{
+  "name": "ccmemgraph",
+  "owner": {
+    "name": "Masao Sasaki"
+  },
+  "description": "ccmemgraph: see Claude Code's auto memory for every project, what the next session loads and what has gone stale.",
+  "plugins": [
+    {
+      "name": "ccmemgraph",
+      "source": "./",
+      "description": "X-ray for Claude Code's auto memory: every project, what gets loaded, what's gone stale."
+    }
+  ]
+}

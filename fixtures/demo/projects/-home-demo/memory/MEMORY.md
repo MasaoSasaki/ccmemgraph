@@ -1,0 +1,3 @@
+- [Machine names](reference_machine_names.md) — orion / lyra
+- [Alpha release plan](project_alpha_release_plan.md) — 2.0 after CI migration
+- [Editor settings](reference_editor_settings.md) — indent
