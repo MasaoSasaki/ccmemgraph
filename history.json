@@ -5,14 +5,8 @@
   "forks": 0,
   "watchers": 0,
   "open_issues": 0,
-  "views_14d": {
-   "count": 0,
-   "uniques": 0
-  },
-  "clones_14d": {
-   "count": 0,
-   "uniques": 0
-  },
+  "views_14d": null,
+  "clones_14d": null,
   "release": "v1.1.0",
   "ci": "success",
   "drift": "success"
