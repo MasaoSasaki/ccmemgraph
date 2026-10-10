@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ccmemgraph Metrics</title>
+<style>
+  /* Layout: a summary strip of figures, then the stars chart, then two columns of records (health + releases, issues + milestones). */
+  :root {
+    color-scheme: light;
+    --bg: #f7f8fa;          /* page ground, cool off-white */
+    --surface: #ffffff;
+    --ink: #0f1419;
+    --ink-2: #4b5563;
+    --muted: #8a919c;
+    --hairline: #e2e6eb;
+    --accent: #2a78d6;      /* ccmemgraph blue */
+    --accent-soft: #dce9f9;
+    --good: #0ca30c;
+    --bad: #d03b3b;
+    --warn: #fab219;
+    --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #121417; --surface: #1a1d21; --ink: #f3f4f6; --ink-2: #c3c7ce; --muted: #8a919c;
+      --accent-soft: #1b2f4a; --good: #2fbf2f; --bad: #e66767; --warn: #fab219;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121417; --surface: #1a1d21; --ink: #f3f4f6; --ink-2: #c3c7ce; --muted: #8a919c;
+    --hairline: #2a2f36; --accent: #5598e7; --accent-soft: #1b2f4a; --good: #2fbf2f; --bad: #e66767; --warn: #fab219;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font); padding-block: 24px 48px; padding-inline: 16px; }
+  main { max-width: 1100px; margin: 0 auto; display: grid; gap: 24px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+  header h1 a { color: inherit; text-decoration: none; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  header .meta code { font-family: var(--mono); font-size: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px; padding: 14px 16px; display: grid; gap: 2px; min-width: 0; }
+  .tile .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .tile .value { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .tile.hero .value { font-size: 40px; color: var(--accent); }
+  .tile .delta { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .tile .delta.up { color: var(--good); }
+  .tile .delta.down { color: var(--bad); }
+  section { background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px; padding: 16px 18px; min-width: 0; }
+  section h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.06em; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+  .chart { width: 100%; height: 220px; display: block; }
+  .chart .grid line { stroke: var(--hairline); }
+  .chart .axis text { fill: var(--muted); font: 11px var(--font); }
+  .chart .axis path, .chart .axis line { stroke: var(--hairline); }
+  .chart .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+  .chart .area { fill: var(--accent-soft); }
+  .chart .dot { fill: var(--accent); }
+  .chart .event line { stroke: var(--muted); stroke-dasharray: 2 3; }
+  .chart .event text { fill: var(--ink-2); font: 11px var(--font); }
+  .note { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.n, th.n { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--accent-soft); color: var(--ink); }
+  .pill.success { background: var(--good); color: #fff; }
+  .pill.failure { background: var(--bad); color: #fff; }
+  .pill.pending { background: var(--warn); color: #111; }
+  a { color: var(--accent); }
+  .empty { color: var(--muted); font-size: 13px; }
+  .error { color: var(--bad); font-size: 13px; }
+  .tablewrap { overflow-x: auto; }
+  @media (prefers-reduced-motion: no-preference) { .tile .value { transition: color 200ms; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><a href="https://github.com/MasaoSasaki/ccmemgraph">MasaoSasaki/ccmemgraph</a></h1>
+    <span class="meta">live figures from the GitHub API, history from the <code>metrics</code> branch (one record per day), loaded <span id="loaded">…</span></span>
+  </header>
+
+  <div class="tiles" id="tiles">
+    <div class="tile hero"><div class="label">Stars</div><div class="value" id="stars">–</div><div class="delta" id="stars-delta"></div></div>
+    <div class="tile"><div class="label">Forks</div><div class="value" id="forks">–</div><div class="delta" id="forks-delta"></div></div>
+    <div class="tile"><div class="label">Watchers</div><div class="value" id="watchers">–</div><div class="delta" id="watchers-delta"></div></div>
+    <div class="tile"><div class="label">Open issues</div><div class="value" id="issues">–</div><div class="delta" id="issues-delta"></div></div>
+    <div class="tile"><div class="label">Views · 14 d</div><div class="value" id="views">–</div><div class="delta" id="views-delta"></div></div>
+    <div class="tile"><div class="label">Clones · 14 d</div><div class="value" id="clones">–</div><div class="delta" id="clones-delta"></div></div>
+  </div>
+
+  <section>
+    <h2>Stars over time</h2>
+    <svg class="chart" id="chart" role="img" aria-label="stars per day"></svg>
+    <p class="note" id="chart-note"></p>
+  </section>
+
+  <div class="cols">
+    <section>
+      <h2>Workflow health</h2>
+      <div class="tablewrap"><table><thead><tr><th>workflow</th><th>last run</th><th>result</th></tr></thead><tbody id="health"></tbody></table></div>
+    </section>
+    <section>
+      <h2>Releases</h2>
+      <div class="tablewrap"><table><thead><tr><th>tag</th><th>published</th><th>name</th></tr></thead><tbody id="releases"></tbody></table></div>
+    </section>
+    <section>
+      <h2>Open issues</h2>
+      <div class="tablewrap"><table><thead><tr><th class="n">#</th><th>title</th><th>opened</th></tr></thead><tbody id="issue-list"></tbody></table></div>
+    </section>
+    <section>
+      <h2>Milestones</h2>
+      <div class="tablewrap"><table><thead><tr><th>date</th><th>event</th></tr></thead><tbody id="events"></tbody></table></div>
+    </section>
+  </div>
+</main>
+
+<script src="../skills/ccmemgraph/vendor/d3.min.js"></script>
+<script>
+const REPO = "MasaoSasaki/ccmemgraph";
+const API = "https://api.github.com/repos/" + REPO;
+const RAW = "https://raw.githubusercontent.com/" + REPO + "/metrics/";
+const $ = id => document.getElementById(id);
+const fmtDate = s => s ? new Date(s).toISOString().slice(0, 10) : "–";
+const num = v => (v === null || v === undefined) ? "–" : v.toLocaleString("en");
+
+async function getJSON(url) {
+  const r = await fetch(url, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
+  if (!r.ok) throw new Error(url.replace(/^https:\/\//, "") + " → HTTP " + r.status + (r.status === 403 ? " (rate limit: 60 unauthenticated requests per hour)" : ""));
+  return r.json();
+}
+
+function delta(el, today, history, key, days = 7) {
+  if (today === null || today === undefined) return;
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const past = history.filter(h => h.date <= cutoff && h[key] !== null && h[key] !== undefined).pop();
+  if (!past) { el.textContent = history.length ? "no record " + days + " days back yet" : ""; return; }
+  const d = today - past[key];
+  el.textContent = (d > 0 ? "+" : "") + d + " in " + days + " d";
+  el.className = "delta " + (d > 0 ? "up" : d < 0 ? "down" : "");
+}
+
+function traffic(history, key) {
+  const last = history.filter(h => h[key]).pop();
+  if (!last) { $(key === "views_14d" ? "views" : "clones").textContent = "–"; $(key === "views_14d" ? "views-delta" : "clones-delta").textContent = "needs METRICS_TOKEN"; return; }
+  const id = key === "views_14d" ? "views" : "clones";
+  $(id).textContent = num(last[key].uniques);
+  $(id + "-delta").textContent = num(last[key].count) + " total, recorded " + last.date;
+}
+
+function chart(history, events) {
+  const svg = d3.select("#chart"), box = svg.node().getBoundingClientRect();
+  const W = box.width || 800, H = 220, m = { t: 12, r: 16, b: 28, l: 36 };
+  svg.attr("viewBox", `0 0 ${W} ${H}`).selectAll("*").remove();
+  const pts = history.filter(h => h.stars !== null).map(h => ({ d: new Date(h.date + "T00:00:00Z"), v: h.stars }));
+  if (!pts.length) { $("chart-note").textContent = "No records yet. The metrics workflow writes one per day."; return; }
+  const x = d3.scaleUtc().domain(pts.length > 1 ? d3.extent(pts, p => p.d) : [d3.utcDay.offset(pts[0].d, -1), d3.utcDay.offset(pts[0].d, 1)]).range([m.l, W - m.r]);
+  const yMax = Math.max(5, d3.max(pts, p => p.v) * 1.15);
+  const y = d3.scaleLinear().domain([0, yMax]).nice().range([H - m.b, m.t]);
+  svg.append("g").attr("class", "grid").selectAll("line").data(y.ticks(4)).join("line")
+    .attr("x1", m.l).attr("x2", W - m.r).attr("y1", d => y(d)).attr("y2", d => y(d));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.min(8, Math.max(2, pts.length))).tickFormat(d3.utcFormat("%b %d")).tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSizeOuter(0));
+  if (pts.length > 1) {
+    svg.append("path").attr("class", "area").attr("d", d3.area().x(p => x(p.d)).y0(y(0)).y1(p => y(p.v)).curve(d3.curveMonotoneX)(pts));
+    svg.append("path").attr("class", "line").attr("d", d3.line().x(p => x(p.d)).y(p => y(p.v)).curve(d3.curveMonotoneX)(pts));
+  }
+  svg.append("g").selectAll("circle").data(pts).join("circle").attr("class", "dot").attr("r", 3.5).attr("cx", p => x(p.d)).attr("cy", p => y(p.v));
+  const ev = svg.append("g").attr("class", "event");
+  events.forEach((e, i) => {
+    const d = new Date(e.date + "T00:00:00Z"); if (d < x.domain()[0] || d > x.domain()[1]) return;
+    ev.append("line").attr("x1", x(d)).attr("x2", x(d)).attr("y1", m.t).attr("y2", H - m.b);
+    ev.append("text").attr("x", x(d) + 4).attr("y", m.t + 10 + (i % 3) * 12).text(e.event.length > 40 ? e.event.slice(0, 38) + "…" : e.event);
+  });
+  $("chart-note").textContent = pts.length === 1
+    ? `One record (${fmtDate(pts[0].d)}). The line appears from the second day.`
+    : `${pts.length} daily records, ${fmtDate(pts[0].d)} to ${fmtDate(pts[pts.length - 1].d)}. Dashed lines are milestones.`;
+}
+
+function pill(c) { const cls = c === "success" ? "success" : c === "failure" ? "failure" : c ? "pending" : ""; return `<span class="pill ${cls}">${c || "running"}</span>`; }
+
+async function main() {
+  $("loaded").textContent = new Date().toLocaleString();
+  let history = [], events = [];
+  try { [history, events] = await Promise.all([getJSON(RAW + "history.json"), getJSON(RAW + "events.json")]); }
+  catch (e) { $("chart-note").textContent = e.message; $("chart-note").className = "error"; }
+  $("events").innerHTML = events.length ? events.slice().reverse().map(e => `<tr><td>${e.date}</td><td>${e.event}</td></tr>`).join("") : `<tr><td colspan="2" class="empty">none recorded</td></tr>`;
+  traffic(history, "views_14d"); traffic(history, "clones_14d");
+
+  let repo;
+  try {
+    repo = await getJSON(API);
+    $("stars").textContent = num(repo.stargazers_count); $("forks").textContent = num(repo.forks_count);
+    $("watchers").textContent = num(repo.subscribers_count); $("issues").textContent = num(repo.open_issues_count);
+    delta($("stars-delta"), repo.stargazers_count, history, "stars");
+    delta($("forks-delta"), repo.forks_count, history, "forks");
+    delta($("watchers-delta"), repo.subscribers_count, history, "watchers");
+    delta($("issues-delta"), repo.open_issues_count, history, "open_issues");
+  } catch (e) {
+    const last = history[history.length - 1];
+    if (last) { $("stars").textContent = num(last.stars); $("forks").textContent = num(last.forks); $("watchers").textContent = num(last.watchers); $("issues").textContent = num(last.open_issues); }
+    $("stars-delta").textContent = e.message; $("stars-delta").className = "delta error";
+  }
+  chart(history, events);
+
+  const sets = await Promise.allSettled([
+    getJSON(API + "/actions/runs?per_page=30"),
+    getJSON(API + "/releases?per_page=10"),
+    getJSON(API + "/issues?state=open&per_page=10"),
+  ]);
+  const [runs, releases, issues] = sets.map(s => s.status === "fulfilled" ? s.value : null);
+  if (runs) {
+    const latest = new Map();
+    for (const r of runs.workflow_runs) if (r.event !== "dynamic" && !latest.has(r.name)) latest.set(r.name, r);  // "dynamic" runs are Dependabot's own update jobs
+    $("health").innerHTML = [...latest.values()].sort((a, b) => a.name.localeCompare(b.name)).map(r =>
+      `<tr><td><a href="${r.html_url}">${r.name}</a></td><td>${fmtDate(r.run_started_at)} <span class="note">${r.event}</span></td><td>${pill(r.conclusion)}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">no runs</td></tr>`;
+  } else $("health").innerHTML = `<tr><td colspan="3" class="error">${sets[0].reason.message}</td></tr>`;
+  if (releases) {
+    $("releases").innerHTML = releases.map(r => `<tr><td><a href="${r.html_url}">${r.tag_name}</a></td><td>${fmtDate(r.published_at)}</td><td>${r.name || ""}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">none</td></tr>`;
+  } else $("releases").innerHTML = `<tr><td colspan="3" class="error">${sets[1].reason.message}</td></tr>`;
+  if (issues) {
+    const only = issues.filter(i => !i.pull_request);
+    if (issues.length < 100) { $("issues").textContent = num(only.length); delta($("issues-delta"), only.length, history, "open_issues"); }
+    $("issue-list").innerHTML = only.map(i => `<tr><td class="n">${i.number}</td><td><a href="${i.html_url}">${i.title}</a></td><td>${fmtDate(i.created_at)}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">no open issues</td></tr>`;
+  } else $("issue-list").innerHTML = `<tr><td colspan="3" class="error">${sets[2].reason.message}</td></tr>`;
+}
+main();
+</script>
+</body>
+</html>

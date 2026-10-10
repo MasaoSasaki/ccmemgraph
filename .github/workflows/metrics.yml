@@ -22,7 +22,9 @@ jobs:
           python-version: "3.13"
       - name: Record today
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          # Traffic (views, clones) needs a token with push access; the workflow token has none and records null.
+          # Add a fine-grained PAT as the METRICS_TOKEN secret to fill those two fields.
+          GITHUB_TOKEN: ${{ secrets.METRICS_TOKEN || github.token }}
         run: python .github/scripts/record_metrics.py "$GITHUB_REPOSITORY" metrics/history.json
       - name: Commit to the metrics branch
         working-directory: metrics
