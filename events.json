@@ -10,5 +10,9 @@
  {
   "date": "2026-10-10",
   "event": "installed on both of the author's Macs"
+ },
+ {
+  "date": "2026-10-11",
+  "event": "v1.1.1: default root follows CLAUDE_CONFIG_DIR, skill defines every finding kind; first user-path check (install into an empty config dir, session run, Python 3.9 on the second Mac)"
  }
 ]
