@@ -5,6 +5,21 @@ All notable changes to ccmemgraph are listed here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version here
 matches `version` in `.claude-plugin/plugin.json`.
 
+## [1.1.1] - 2026-10-11
+
+### Fixed
+
+- The default scan root follows `CLAUDE_CONFIG_DIR`, so a user who moved the
+  Claude Code config directory no longer gets an empty page.
+- A projects directory that does not exist is said so, on the page and as a
+  `root:` line in the summary, instead of being reported as zero memories.
+
+### Changed
+
+- SKILL.md defines every memory state and finding kind, so the skill answers
+  "what does this mean" from those definitions instead of guessing; a test
+  keeps the list complete.
+
 ## [1.1.0] - 2026-10-10
 
 ### Added
@@ -43,5 +58,6 @@ matches `version` in `.claude-plugin/plugin.json`.
 - Light and dark mode, no network access, D3 7.9.0 bundled into the page.
 - Python 3.9+ standard library only; tested on 3.9 and 3.13.
 
+[1.1.1]: https://github.com/MasaoSasaki/ccmemgraph/releases/tag/v1.1.1
 [1.1.0]: https://github.com/MasaoSasaki/ccmemgraph/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MasaoSasaki/ccmemgraph/releases/tag/v1.0.0

@@ -13,7 +13,7 @@ Then type `/ccmemgraph` in any session. Local only, nothing is sent anywhere, no
 
 ## What you see
 
-Claude Code keeps auto memory per project under `~/.claude/projects/<project>/memory/`, with a `MEMORY.md` index. Only the first 200 lines (25,000 characters) of that index are loaded when a session starts, and the `/memory` command shows one project at a time. ccmemgraph reads every project at once and shows, for each memory file:
+Claude Code keeps auto memory per project under `~/.claude/projects/<project>/memory/` (under `$CLAUDE_CONFIG_DIR/projects/` when that variable is set), with a `MEMORY.md` index. Only the first 200 lines (25,000 characters) of that index are loaded when a session starts, and the `/memory` command shows one project at a time. ccmemgraph reads every project at once and shows, for each memory file:
 
 - **Visible** — listed inside the load window; the next session knows it exists.
 - **Cut** — listed in `MEMORY.md`, but past the load window. The file is there; the session never hears of it.
@@ -27,7 +27,7 @@ Everything is computed from the files as they are now, so it describes the *next
 ## Running outside Claude Code
 
 ```
-python3 skills/ccmemgraph/build.py            # scan ~/.claude/projects, write to the temp dir, open it
+python3 skills/ccmemgraph/build.py            # scan the Claude Code projects directory, write to the temp dir, open it
 python3 skills/ccmemgraph/build.py --no-open --out ~/memory.html
 python3 skills/ccmemgraph/build.py --root fixtures/demo/projects --fs-root fixtures/demo/fs --home /home/demo   # the demo data
 ```

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """ccmemgraph: render Claude Code's auto memory for every project as one HTML page.
 
-For each project under ~/.claude/projects the script reads <project>/memory/,
+For each project under the Claude Code config directory (~/.claude/projects, or
+$CLAUDE_CONFIG_DIR/projects when that variable is set) the script reads <project>/memory/,
 works out which memories the next session will see (the MEMORY.md load window),
 how old each memory is, and which structural problems the directory has.
 The page is a single self-contained HTML file; nothing leaves the machine.
@@ -363,7 +364,7 @@ def scan(root: Path, fs_root: str = "/", home: str | None = None, now_ms: float 
         "states": {s: sum(1 for n in nodes.values() if n["state"] == s) for s in STATES},
         "limits": LIMITS, "claude_code": claude_code_info(),
         "generated": dt.datetime.now().astimezone().isoformat(timespec="minutes"),
-        "root": str(root), "home": home,
+        "root": str(root), "root_missing": False, "home": home,
     }
 
 
@@ -444,6 +445,8 @@ def summary_lines(model: dict, out: Path) -> list:
     if cc["running"] and cc["running"] != cc["measured"]:
         lines.append("claude code: running %s, limits measured on %s (not re-verified on this version)"
                      % (cc["running"], cc["measured"]))
+    if model["root_missing"]:
+        lines.append("root: %s does not exist; nothing was scanned" % model["root"])
     lines.append("out: %s" % out)
     return lines
 
@@ -460,15 +463,25 @@ def open_in_browser(path: Path) -> None:
         pass
 
 
+def default_projects_root() -> Path:
+    """Where Claude Code keeps per-project transcripts and auto memory: <config dir>/projects.
+
+    CLAUDE_CONFIG_DIR relocates the whole config directory (docs: "All settings, session history, and
+    plugins are stored under this path"), and a session passes the variable on to the commands it runs.
+    """
+    config = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
+    return Path(config).expanduser() / "projects"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--root", default=str(Path.home() / ".claude" / "projects"), help="projects directory to scan")
+    ap.add_argument("--root", default=None, help="projects directory to scan (default: <Claude Code config dir>/projects)")
     ap.add_argument("--out", default=str(Path(tempfile.gettempdir()) / "ccmemgraph" / "ccmemgraph.html"), help="HTML output path")
     ap.add_argument("--no-open", action="store_true", help="do not open the page in a browser")
     ap.add_argument("--fs-root", default="/", help=argparse.SUPPRESS)  # resolve project slugs against this tree (fixtures)
     ap.add_argument("--home", default=str(Path.home()), help=argparse.SUPPRESS)  # home directory shown as ~ (fixtures)
     a = ap.parse_args(argv)
-    root = Path(a.root).expanduser()
+    root = Path(a.root).expanduser() if a.root else default_projects_root()
     model = scan(root, fs_root=a.fs_root, home=a.home) if root.is_dir() else scan_empty(root)
     model["claude_code"] = claude_code_info(running_claude_code_version())
     out = Path(a.out).expanduser()
@@ -483,7 +496,7 @@ def main(argv=None) -> int:
 def scan_empty(root: Path) -> dict:
     return {"nodes": [], "links": [], "issues": [], "projects": [], "states": {s: 0 for s in STATES}, "limits": LIMITS,
             "claude_code": claude_code_info(), "generated": dt.datetime.now().astimezone().isoformat(timespec="minutes"),
-            "root": str(root), "home": str(Path.home())}
+            "root": str(root), "root_missing": True, "home": str(Path.home())}
 
 
 if __name__ == "__main__":

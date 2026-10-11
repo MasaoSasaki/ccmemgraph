@@ -107,7 +107,7 @@
 <body>
 <header>
   <h1>ccmemgraph</h1>
-  <p class="sub">Claude Code auto memory under <code id="root"></code>. Nodes are memory files, colour is age (deeper = older), a ring marks what the next session will not see in <code>MEMORY.md</code>, size is in-links. Generated <span id="gen"></span>. <span id="cc"></span></p>
+  <p class="sub">Claude Code auto memory under <code id="root"></code><span id="root-note"></span>. Nodes are memory files, colour is age (deeper = older), a ring marks what the next session will not see in <code>MEMORY.md</code>, size is in-links. Generated <span id="gen"></span>. <span id="cc"></span></p>
 </header>
 <div class="bar">
   <div class="states" id="states" aria-label="memory states"></div>
@@ -158,6 +158,7 @@ const ccNote = CC.running && CC.running !== CC.measured
   : `Limits are those of Claude Code ${CC.measured}.`;
 document.getElementById("cc").textContent = ccNote;
 document.getElementById("root").textContent = DATA.root.replace(DATA.home, "~");
+if (DATA.root_missing) document.getElementById("root-note").textContent = " (this directory does not exist; nothing was scanned)";
 
 const svg = d3.select("#g"), main = document.querySelector("main"), tip = document.getElementById("tip");
 let W = main.clientWidth, H = main.clientHeight, sim = null, current = "";

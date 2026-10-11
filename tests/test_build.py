@@ -235,9 +235,20 @@ class Robustness(unittest.TestCase):
             self.assertEqual(model["states"], {"visible": 0, "cut": 0, "unindexed": 1, "missing": 0})
             self.assertEqual(build.summary_lines(model, Path("/o.html"))[0], "projects=2 files=1 links=0")
 
-    def test_missing_root(self):
+    def test_missing_root_is_said_not_hidden(self):
         model = build.scan_empty(Path("/does/not/exist"))
         self.assertEqual(model["projects"], [])
+        self.assertTrue(model["root_missing"])
+        self.assertIn("root: /does/not/exist does not exist; nothing was scanned", build.summary_lines(model, Path("/o.html")))
+        self.assertIn('"root_missing": true', build.render(model, ROOT / "skills" / "ccmemgraph"))
+        self.assertIn('"root_missing": false', build.render(scan_demo(), ROOT / "skills" / "ccmemgraph"))
+
+    def test_default_root_follows_claude_config_dir(self):
+        with unittest.mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "/cfg/work"}):
+            self.assertEqual(build.default_projects_root(), Path("/cfg/work/projects"))
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CONFIG_DIR"}
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(build.default_projects_root(), Path.home() / ".claude" / "projects")
 
 
 def rewrite(path, fn):
@@ -269,7 +280,8 @@ class ClaudeCodeVersionTests(unittest.TestCase):
             self.assertEqual(build.running_claude_code_version(), "2.1.300")
 
     def test_summary_mentions_running_version_only_when_it_differs(self):
-        model = build.scan_empty(Path("/nonexistent"))
+        with tempfile.TemporaryDirectory() as tmp:
+            model = build.scan(Path(tmp), fs_root=tmp, home="/nowhere", now_ms=NOW_MS)
         model["claude_code"] = build.claude_code_info(build.SOURCE_VERSION)
         self.assertEqual(len(build.summary_lines(model, Path("o"))), 4)
         model["claude_code"] = build.claude_code_info("9.9.9")
@@ -282,6 +294,14 @@ class ClaudeCodeVersionTests(unittest.TestCase):
         plugin = (ROOT / ".claude-plugin" / "plugin.json").read_text()
         version = re.search(r'"version":\s*"([^"]+)"', plugin).group(1)
         self.assertIn("## [%s]" % version, (ROOT / "CHANGELOG.md").read_text())
+
+    def test_skill_defines_every_state_and_finding_kind(self):
+        """The skill answers "what does this mean" from SKILL.md, so every state and kind needs a definition there."""
+        skill = (ROOT / "skills" / "ccmemgraph" / "SKILL.md").read_text(encoding="utf-8")
+        for state in build.STATES:
+            self.assertRegex(skill, r"(?m)^- `%s`: " % state, msg=state)
+        for kind, severity in build.SEVERITY.items():
+            self.assertRegex(skill, r"(?m)^- `%s` \(%s\): " % (kind, severity), msg=kind)
 
     def test_probe_reads_a_synthetic_limits_statement(self):
         import limits_probe
