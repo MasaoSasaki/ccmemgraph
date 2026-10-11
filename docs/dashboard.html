@@ -84,7 +84,7 @@
 <main>
   <header>
     <h1><a href="https://github.com/MasaoSasaki/ccmemgraph">MasaoSasaki/ccmemgraph</a></h1>
-    <span class="meta">live figures from the GitHub API, history from the <code>metrics</code> branch (one record per day), loaded <span id="loaded">…</span></span>
+    <span class="meta">live figures from the GitHub API, history from the <code>metrics</code> branch (one record per day). Updated <span id="loaded">…</span>; <span id="refresh-note">refreshes every 5 minutes while visible</span></span>
   </header>
 
   <div class="tiles" id="tiles">
@@ -131,13 +131,28 @@ const $ = id => document.getElementById(id);
 const fmtDate = s => s ? new Date(s).toISOString().slice(0, 10) : "–";
 const num = v => (v === null || v === undefined) ? "–" : v.toLocaleString("en");
 
+// Refresh cadence. One refresh costs 4 API requests (repository, runs, releases, issues); the raw
+// files on the metrics branch are not rate-limited. Unauthenticated callers get 60 requests per
+// hour per address, so 5 minutes leaves room for one open page per network, not two.
+const REFRESH_MS = 5 * 60 * 1000;
+let rateLimitedUntil = 0;  // epoch ms from X-RateLimit-Reset when a 403 said the hour is spent
+
 async function getJSON(url) {
   const r = await fetch(url, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
-  if (!r.ok) throw new Error(url.replace(/^https:\/\//, "") + " → HTTP " + r.status + (r.status === 403 ? " (rate limit: 60 unauthenticated requests per hour)" : ""));
+  if (!r.ok) {
+    let why = "";
+    if (r.status === 403) {
+      const reset = Number(r.headers.get("X-RateLimit-Reset")) * 1000;
+      if (reset) rateLimitedUntil = Math.max(rateLimitedUntil, reset);
+      why = " (rate limit: 60 unauthenticated requests per hour" + (reset ? ", resets " + new Date(reset).toLocaleTimeString() : "") + ")";
+    }
+    throw new Error(url.replace(/^https:\/\//, "") + " → HTTP " + r.status + why);
+  }
   return r.json();
 }
 
 function delta(el, today, history, key, days = 7) {
+  el.className = "delta";
   if (today === null || today === undefined) return;
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const past = history.filter(h => h.date <= cutoff && h[key] !== null && h[key] !== undefined).pop();
@@ -159,6 +174,7 @@ function chart(history, events) {
   const svg = d3.select("#chart"), box = svg.node().getBoundingClientRect();
   const W = box.width || 800, H = 220, m = { t: 12, r: 16, b: 28, l: 36 };
   svg.attr("viewBox", `0 0 ${W} ${H}`).selectAll("*").remove();
+  $("chart-note").className = "note";
   const pts = history.filter(h => h.stars !== null).map(h => ({ d: new Date(h.date + "T00:00:00Z"), v: h.stars }));
   if (!pts.length) { $("chart-note").textContent = "No records yet. The metrics workflow writes one per day."; return; }
   const x = d3.scaleUtc().domain(pts.length > 1 ? d3.extent(pts, p => p.d) : [d3.utcDay.offset(pts[0].d, -1), d3.utcDay.offset(pts[0].d, 1)]).range([m.l, W - m.r]);
@@ -204,8 +220,10 @@ async function main() {
     delta($("watchers-delta"), repo.subscribers_count, history, "watchers");
     delta($("issues-delta"), repo.open_issues_count, history, "open_issues");
   } catch (e) {
+    // Fill from the newest record only when nothing live is on screen yet; a refresh that fails
+    // keeps the live figures it already showed rather than replacing them with yesterday's.
     const last = history[history.length - 1];
-    if (last) { $("stars").textContent = num(last.stars); $("forks").textContent = num(last.forks); $("watchers").textContent = num(last.watchers); $("issues").textContent = num(last.open_issues); }
+    if (last && $("stars").textContent === "–") { $("stars").textContent = num(last.stars); $("forks").textContent = num(last.forks); $("watchers").textContent = num(last.watchers); $("issues").textContent = num(last.open_issues); }
     $("stars-delta").textContent = e.message; $("stars-delta").className = "delta error";
   }
   chart(history, events);
@@ -231,7 +249,27 @@ async function main() {
     $("issue-list").innerHTML = only.map(i => `<tr><td class="n">${i.number}</td><td><a href="${i.html_url}">${i.title}</a></td><td>${fmtDate(i.created_at)}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">no open issues</td></tr>`;
   } else $("issue-list").innerHTML = `<tr><td colspan="3" class="error">${sets[2].reason.message}</td></tr>`;
 }
-main();
+// Keep the page current while it is open. A hidden tab stops polling and catches up when shown
+// again, so a page left open on a phone does not spend the rate limit on a screen nobody sees.
+let refreshTimer = null, lastRefresh = 0;
+async function refresh() {
+  clearTimeout(refreshTimer);
+  lastRefresh = Date.now();
+  await main();
+  if (document.hidden) return;  // went hidden mid-fetch; visibilitychange schedules the next one
+  const wait = Math.max(REFRESH_MS, rateLimitedUntil - Date.now() + 1000);
+  $("refresh-note").textContent = rateLimitedUntil > Date.now()
+    ? "rate limit reached; next refresh " + new Date(Date.now() + wait).toLocaleTimeString()
+    : "refreshes every 5 minutes while visible";
+  refreshTimer = setTimeout(refresh, wait);
+}
+document.addEventListener("visibilitychange", () => {
+  clearTimeout(refreshTimer);
+  if (document.hidden) return;
+  const due = lastRefresh + Math.max(REFRESH_MS, rateLimitedUntil - lastRefresh) - Date.now();
+  if (due <= 0) refresh(); else refreshTimer = setTimeout(refresh, due);
+});
+refresh();
 </script>
 </body>
 </html>
